@@ -12,7 +12,7 @@ Real estate organizations often struggle to consolidate and analyze large proper
 
 **Objectives:**  
 - Automate extraction, transformation, and loading (ETL) of large property datasets.
-- Generate dimension tables (dim_property, dim_location, dim_customer_financials) and a fact table (fact_property_purchase).
+- Generate dimension tables (`dim_property`, `dim_location`, `dim_customer_financials`) and a fact table (`fact_property_purchase`).
 - Store processed data in a format suitable for analytics (Parquet).
 - Enable further consumption by BI tools or ML models for property value predictions and investment analysis.
 
@@ -45,139 +45,93 @@ Raw CSV Data → ETL Pipeline (Spark / PySpark) → Dimension & Fact Tables → 
 
 ## 🔄 Data Flow and Processing Steps
 
-**1. Ingestion Layer:**  
-- Data is extracted from various sources, which in this case, it is extracted from Kaggle dataset. 
-- Ingested into S3 as raw data within the raw folder.  
-- Handles large datasets by splitting into manageable chunks with the help of ```split_into_chunks.py```.
-- Data categorized into `raw` (Bronze), `processed` (Silver), and `analytics` (Gold) zones.
+**1. Ingestion Layer:**
+  - Reads CSV files from raw data folder (./raw-data).
+  - Handles large datasets by splitting into manageable chunks.
 
-**2. Transformation Layer:**  
-- AWS Glue jobs clean and join data, and create Facts and Dimension Tables.  
-- Schema evolution handled automatically.  
-- Output stored as Parquet for efficient querying.
+**2. Cleaning Layer:**
+  - Drops unnecessary columns (e.g., previous_owners).
+  - Standardizes column names for consistency.
 
-**3. Storage Layer:**  
-- Raw data is stored in S3 buckets with lifecycle policies.  
-- Versioning and encryption enabled (SSE-S3 / KMS).
+**3. Dimension Tables Creation:**
+  - dim_property: Includes property characteristics (property_type, furnishing_status, rooms, bathrooms, garage, garden, property_size_sqft).
+  - dim_location: Includes location and risk metrics (country, city, crime_cases_reported, legal_cases_on_property, neighbourhood_rating, connectivity_score).
+  - dim_customer_financials: Includes financial metrics of customers (customer_salary, loan_amount, loan_tenure_years, monthly_expenses, emi_to_income_ratio).
 
-**4. Warehouse / Analytics Layer:**
-- Redshift or Athena queries used for BI and model training.  
-- QuickSight dashboards visualize KPIs.
+**4. Fact Table Creation:**
+  - Joins the three dimension tables with the main dataset.
+  - Includes keys referencing dimensions and metrics (property_id, price, down_payment, decision).
+
+**5. Storage Layer:**
+  - Writes dimension tables in overwrite mode.
+  - Writes fact table in append mode.
+  - All output stored in Parquet format in ./processed-data.
+
+**5. Warehouse / Analytics Layer:****
+  - Redshift or Athena queries used for BI and model training.  
+  - QuickSight dashboards visualize KPIs.
 
 ---
 
-[//]: # (## ⚙️ Workflow Orchestration)
+## ⚙️ Workflow Orchestration
 
-[//]: # ()
-[//]: # (| **Tool** | **Role** |)
 
-[//]: # (|-----------|-----------|)
-
-[//]: # (| AWS Step Functions | Manage pipeline flow |)
-
-[//]: # (| EventBridge | Schedule periodic runs |)
-
-[//]: # (| SNS | Notify on success/failure |)
-
-[//]: # (| CloudWatch | Monitor performance metrics |)
+| **Tool**               | **Role**                                             |
+|:-----------------------|:-----------------------------------------------------|
+| PySpark / SparkSession | Executes ETL transformations in a distributed manner |
+| Python scripts         | Automates reading, cleaning, and writing of data     |
+| SNS                    | Notify on success/failure                            |
+| CloudWatch             | Monitor performance metrics                          |
 
 ---
 
 ## 🔐 Security & Compliance
-
-- IAM roles follow least privilege principle.  
-- Encryption at rest (S3 KMS, Redshift encryption).  
-- Encryption in transit (HTTPS, SSL).  
-- Logging enabled via CloudTrail.  
-- Compliance: GDPR / HIPAA as applicable.
+- Data stored in S3 or Redshift can be encrypted using SSE-KMS or Redshift encryption.
+- IAM roles ensure least-privilege access for ETL processes.
+- Logging via CloudWatch or Spark logs for auditability.
+- Compliance with data privacy policies for financial and personal property information.
 
 ---
 
 ## 🚀 Scalability & Performance
-
-- Serverless services like Glue handle scaling automatically.  
-- Partitioning and bucketing improve query performance.   
-- Cost optimization via data compression and lifecycle rules and better coding quality.
+- Uses PySpark for distributed processing of large datasets.
+- Handles large CSV files by splitting them into smaller chunks.
+- Dimension tables deduplicated to reduce storage overhead.
+- Output Parquet format optimized for query performance in analytics.
 
 ---
 
 ## 🧰 Monitoring & Error Handling
 
-| **Tool** | **Purpose** |
-|-----------|-------------|
-| CloudWatch Logs | Track ETL job status |
-| SNS Alerts | Notify on failures |
-| Dead-Letter Queues | Capture failed records |
-| Glue Job Bookmarks | Ensure idempotent processing |
+| **Tool**           | **Purpose**                                        |
+|:-------------------|:---------------------------------------------------|
+| Spark Logs         | Track ETL job progress and errors                  | 
+| Console Prints     | Status messages for file processing and time taken |  
+| Retry Mechanism    | Rerun failed file processing                       |
+| Glue Job Bookmarks | Ensure idempotent processing                       |
+
 
 ---
-
-[//]: # (## 🔁 Deployment & CI/CD)
-
-[//]: # ()
-[//]: # (| **Tool** | **Function** |)
-
-[//]: # (|-----------|--------------|)
-
-[//]: # (| GitHub Actions / CodePipeline | CI/CD automation |)
-
-[//]: # (| Terraform / CloudFormation | Infrastructure as Code |)
-
-[//]: # (| S3 + Lambda Deployments | Serverless updates |)
-
-[//]: # (| Environment Segregation | Dev → Staging → Prod |)
-
----
-
-## 📊 Sample Data Schema
-
-**Table:** `sales_data`  
-
-|  Column  |  Type  |      Description      | 
-|:--------:|:------:|:---------------------:|
-| **order_id** | ```STRING``` | Unique transaction ID |
-| **user_id** | ```STRING``` | Customer identifier |
-| **product_id** | ```STRING``` | Product reference |
-| **quantity** | ```INT``` | Quantity purchased |
-| **total_price** | ```FLOAT``` | Total transaction amount |
-| **timestamp** | ```TIMESTAMP``` | Purchase time |
-
----
-
-## 📈 Sample Query (Redshift / Athena)
-
-```sql
-SELECT 
-  product_id, 
-  SUM(total_price) AS total_sales
-FROM curated.sales_data
-GROUP BY product_id
-ORDER BY total_sales DESC
-LIMIT 10;
-```
 
 ## 🧱 Future Improvements
-- Add data quality checks (Great Expectations, Deequ).
-- Introduce Delta Lake or Iceberg for ACID transactions.
-- Enable ML feature store integration.
-- Add cost tracking via AWS Cost Explorer.
+- Integrate with AWS Glue Catalog for automated schema management.
+- Implement real-time ingestion via Kinesis or Kafka for live property updates.
+- Add data quality validation using Great Expectations.
+- Integrate with ML models for property price prediction or risk scoring.
+- Deploy CI/CD pipelines to automate ETL deployment and monitoring.
 
 ## 📂 Folder Structure
 ```plaintext
-/project-root
- ├── /src                  # ETL scripts (Glue/Spark)
- ├── /infra                # IaC templates (Terraform/CloudFormation)
- ├── /notebooks            # Data exploration
- ├── /docs                 # Documentation & diagrams
- ├── README.md
- └── requirements.txt
+/property-sales-analytics-data-engineering/
+├── raw-data
+│ ├── global_house_purchase_dataset.csv     # Dataset to be worked upon
+│ └── split_into_chunks.py                  # Python script to split large csv file into chunks
+├── etl_pipeline.py                         # Python script to run the ETL pipeline
+└── README.md
 ```
 
 ## 📎 Appendix
-- References:
-  - AWS Glue Documentation
-  - Redshift Best Practices
-  - Data Lake Architecture (AWS Whitepaper)
-- Contacts:
-  - Data Engineer: [Your Name]
-  - Email: [your.email@example.com]
+### References:
+1. PySpark Documentation: https://spark.apache.org/docs/latest/api/python/
+2. AWS S3 & Glue Best Practices: https://docs.aws.amazon.com/glue/latest/dg/best-practices.html
+3. Data Lake Architecture Whitepaper: https://docs.aws.amazon.com/whitepapers/latest/building-data-lakes/building-data-lakes.pdf
